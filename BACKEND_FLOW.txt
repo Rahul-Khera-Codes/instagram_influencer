@@ -1,0 +1,80 @@
+This file explains the backend flow for the FastAPI app in `server/`.
+
+Overview
+- **Framework**: FastAPI
+- **Entry point**: `server/main.py` (creates `app` and includes routers from `auth.py` and `influencers.py`)
+- **Database**: MongoDB (optional; configured via `MONGO_URI` in `.env`) — connections and collections are in `server/db.py`
+
+Startup
+- `server/main.py` loads environment variables and configures CORS and middleware.
+- On startup, an index is created on `users_collection.email` to enforce unique emails.
+- `server/db.py` initializes `client`, `db`, `users_collection`, and `searches_collection` when `MONGO_URI` is present. A TTL index on `searches.created_at` is attempted to expire cached searches (default 24h).
+
+Routing and Modules
+- `auth.py` defines the `APIRouter` with prefix `/auth`: register, login, refresh, get/update/delete user.
+  - Uses `pymongo` to talk to the `users` collection and `passlib` for password hashing.
+  - Produces JWTs (access and refresh) using separate secrets and expiry configuration.
+  - `get_current_user` dependency validates access tokens and loads the user from Mongo by `_id`.
+- `influencers.py` defines the `APIRouter` with influencer-related endpoints under `/influencers`.
+  - Endpoints: `/search/top`, `/insights`, `/profile`, `/fetch_rapid_followers`, `/summary`.
+  - Most endpoints require a valid user via `get_current_user` dependency.
+
+Auth flow (high-level)
+1. User registers via `/auth/register` — creates a user doc in `users` collection and returns access + refresh tokens.
+2. User logs in via `/auth/login` — verifies password, returns tokens and user object.
+3. Client sends access token in `Authorization: Bearer <token>` header for protected endpoints.
+4. `get_current_user` decodes JWT (access secret) and loads user from DB.
+5. Refresh token exchange: `/auth/refresh` expects a Bearer refresh token and returns a new access token.
+
+Influencer search flow
+- `/influencers/search/top?keyword=...&limit=...`:
+  1. Normalize `keyword` (lowercased) and build `cache_query` (optionally includes `user_id`).
+  2. Attempt to find cached results in `searches_collection`. If found, return cached results.
+  3. If not cached, call RapidAPI `users_search` endpoint with the raw keyword and limit.
+  4. Parse response into simplified `profile` objects for each user. For each profile, attempt to enrich with:
+     - `fetch_rapid_follower_profile` (calls RapidAPI `/profile`) — returns follower and media counts.
+     - `get_insights` (calls RapidAPI `/feed`) — aggregates up to 20 recent posts to compute avg likes, engagement, engagement rate.
+  5. Store the normalized results into `searches_collection` (replace_one upsert with `cache_query`) for future cached lookups.
+  6. Return results to the client.
+
+Insights & profile endpoints
+- `/influencers/insights`: prefer `user_id` (pk). It calls `get_insights` which:
+  - Calls RapidAPI `/feed` to fetch up to 20 items, sums likes/comments, computes averages and engagement metrics.
+  - Calls `fetch_rapid_follower_profile` for follower counts and media_count.
+  - If metrics are incomplete (followers missing), retries once after a short delay.
+- `/influencers/profile`: calls RapidAPI `/profile` to get a user's profile fields.
+
+OpenAI integration (summary generation)
+- `/influencers/summary` accepts influencer metrics and builds a system prompt + user prompt to request a 2–3 page report.
+- It calls OpenAI Chat Completions API (`/v1/chat/completions`) with the `OPENAI_KEY` and returns the generated summary.
+
+Error handling & fallbacks
+- RapidAPI calls have try/except wrappers: on network/errors, the code attempts to return stale cached data if available, otherwise raises HTTP 502.
+- Many enrichment steps are best-effort; failures are logged and do not block returning basic profile data.
+
+Security notes
+- Passwords are hashed with `bcrypt` via `passlib`.
+- Access and refresh tokens use different secrets and expiry durations.
+- CORS is configured in `main.py` to allow listed origins and manually echoes origin for credentialed requests.
+
+Files to inspect
+- `server/main.py` — app creation, CORS, JWT helper utilities, router includes.
+- `server/auth.py` — registration/login/refresh and user management; token creation.
+- `server/influencers.py` — influencer search, profile, insights, OpenAI summary.
+- `server/db.py` — MongoDB connection and collection setup.
+
+How a typical request flows (concise sequence)
+1. Client sends request to protected endpoint with `Authorization: Bearer <access_token>`.
+2. FastAPI dependency `get_current_user` in `auth.py` decodes token and fetches user from DB.
+3. Endpoint handler uses the user info and possibly DB collections (searches/users).
+4. For influencer data, the handler checks cache, calls RapidAPI if needed, enriches results, caches them, and returns JSON.
+5. For summary generation, the handler calls OpenAI and returns the generated report.
+
+Appendix: Important env vars
+- `MONGO_URI` — MongoDB connection string (optional; if absent caching and users DB may be disabled in `server/db.py`).
+- `RAPIDAPI_KEY` — RapidAPI key for Instagram endpoints.
+- `OPENAI_KEY` — OpenAI API key for generating summaries.
+- `SECRET_KEY` / `ACCESS_SECRET` / `REFRESH_SECRET` — JWT signing secrets.
+- `FRONTEND_URL` — used for CORS allowed origins.
+
+End of file.

@@ -235,21 +235,8 @@ Troubleshooting
 - If Mongo isn't configured, the app will run but caching is disabled. Ensure `MONGO_URI` is set.
 - RapidAPI may return different response shapes; the code includes defensive parsing for `items`, `media`, or `data`.
 
-Further improvements
---------------------
-- Replace in-process O(N) vector scan with a vector database (Pinecone, Milvus). This improves latency and enables approximate nearest neighbor search for large datasets.
-- Add a background worker (Celery, RQ) to refresh embeddings and RapidAPI enrichments regularly.
-- Add tests for the enrichment & search pipelines.
-
----
-
 For a developer-facing architecture overview see `BACKEND_FLOW.txt` in project root for a concise description of request flows and integrations.
 
-If you'd like, I can implement the semantic search endpoints and an enrichment script next — tell me whether you prefer Mongo-based vector search or integrating a dedicated vector DB.
-
-# Insta_influencer_scrap
-# Insta_influencer_scrap
-‣慮敲桳楟普畬湥散彲慭歲瑥湩੧
 
 
 

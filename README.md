@@ -65,7 +65,8 @@ Key implementation details:
 - RapidAPI calls have best-effort fallbacks to Mongo cache when the API fails.
 - A helper `get_embedding(text)` exists in `server/influencers.py` and calls OpenAI embeddings API (`text-embedding-3-small`).
 
-Flow Diagram of code
+Flow Diagram of Code
+---------------------------------
 
 ```mermaid
 graph TD
@@ -118,6 +119,26 @@ Key endpoints
 - `GET /influencers/profile?user_id=...` — fetch profile details
 - `GET /influencers/insights?user_id=...` — fetch aggregated feed metrics
 - `POST /influencers/summary` — generate GPT-based influencer report
+
+Rapid API endpoints
+------------------
+:rocket: RapidAPI Endpoints Used
+The project uses the Instagram Best Experience API from RapidAPI (instagram-best-experience.p.rapidapi.com) with three main endpoints:
+1. Users Search Endpoint (/users_search)
+- Purpose: Search for Instagram users by keyword
+- Usage: Primary search functionality to find influencers
+- Parameters: query (search keyword), count (number of results)
+- Returns: List of Instagram users matching the search criteria
+2. Profile Endpoint (/profile)
+- Purpose: Fetch detailed profile information for a specific user
+- Usage: Get follower count, media count, bio, and other profile details
+- Parameters: user_id (Instagram user ID/pk)
+- Returns: Complete profile data including follower_count, media_count, biography, etc.
+3. Feed Endpoint (/feed)
+- Purpose: Retrieve recent posts from a user's Instagram feed
+- Usage: Calculate engagement metrics (avg likes, engagement rate)
+- Parameters: user_id (Instagram user ID), count (number of posts to fetch, limited to 20)
+- Returns: Recent posts with like_count and comment_count for analytics
 
 Adding AI-powered semantic search
 --------------------------------
@@ -229,5 +250,6 @@ If you'd like, I can implement the semantic search endpoints and an enrichment s
 # Insta_influencer_scrap
 # Insta_influencer_scrap
 ‣慮敲桳楟普畬湥散彲慭歲瑥湩੧
+
 
 
